@@ -3,35 +3,26 @@ import 'package:provider/provider.dart';
 
 void main() {
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => FavoriteModel(maxItems: 20),
-      child: const MyApp(),
-    ),
+    ChangeNotifierProvider(create: (_) => CartModel(), child: const MyApp()),
   );
 }
 
-/// 负责管理 “收藏状态” 的 Model（Publisher）
-/// 只要数据改变就 notifyListeners()，UI（Subscriber）会自动更新。
-class FavoriteModel extends ChangeNotifier {
-  FavoriteModel({required this.maxItems});
+class CartModel extends ChangeNotifier {
+  final List<String> _items = [];
 
-  final int maxItems;
+  List<String> get items => _items;
 
-  // 用 Set 保存被收藏的 item index（例如 0, 3, 10）
-  final Set<int> _fav = <int>{};
-
-  bool isFav(int index) => _fav.contains(index);
-
-  void toggle(int index) {
-    if (_fav.contains(index)) {
-      _fav.remove(index);
-    } else {
-      _fav.add(index);
-    }
-    notifyListeners(); // 通知所有监听者刷新 UI
+  void add(String item) {
+    _items.add(item);
+    notifyListeners();
   }
 
-  int get count => _fav.length;
+  void remove(String item) {
+    _items.remove(item);
+    notifyListeners();
+  }
+
+  int get totalPrice => _items.length * 42;
 }
 
 class MyApp extends StatelessWidget {
@@ -41,54 +32,177 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: FavoriteListPage(),
+      home: CatalogPage(),
     );
   }
 }
 
-class FavoriteListPage extends StatelessWidget {
-  const FavoriteListPage({super.key});
+class CatalogPage extends StatelessWidget {
+  const CatalogPage({super.key});
+
+  static final List<Map<String, dynamic>> products = [
+    {'name': 'Code Smell', 'color': Colors.red},
+    {'name': 'Control Flow', 'color': Colors.pink},
+    {'name': 'Interpreter', 'color': Colors.purple},
+    {'name': 'Recursion', 'color': Colors.deepPurple},
+    {'name': 'Sprint', 'color': Colors.indigo},
+    {'name': 'Heisenbug', 'color': Colors.blue},
+    {'name': 'Spaghetti', 'color': Colors.lightBlue},
+    {'name': 'Hydra Code', 'color': Colors.cyan},
+    {'name': 'Off-By-One', 'color': Colors.teal},
+    {'name': 'Scope', 'color': Colors.green},
+    {'name': 'Callback', 'color': Colors.lightGreen},
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final maxItems = context.read<FavoriteModel>().maxItems;
+    final cart = context.watch<CartModel>();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Favorite List'),
+        title: const Text('Catalog'),
         actions: [
-          // 右上角显示收藏数量（可选，但很常见）
-          Consumer<FavoriteModel>(
-            builder: (context, model, _) {
-              return Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: Center(child: Text('Fav: ${model.count}')),
+          IconButton(
+            icon: const Icon(Icons.shopping_cart),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CartPage()),
               );
             },
           ),
         ],
       ),
-      body: ListView.builder(
-        itemCount: maxItems, // ✅ 限制 item = 20
-        itemBuilder: (context, index) {
-          // 只重建这一行（Consumer 包住 row）
-          return Consumer<FavoriteModel>(
-            builder: (context, model, _) {
-              final isFav = model.isFav(index);
+      body: Container(
+        color: const Color(0xFFFFF7E6), // 👈 米色背景
+        child: ListView.builder(
+          itemCount: products.length,
+          itemBuilder: (context, index) {
+            final item = products[index];
+            final name = item['name'];
+            final color = item['color'];
+            final isAdded = context.watch<CartModel>().items.contains(name);
 
-              return ListTile(
-                title: Text('Item #$index'),
-                trailing: IconButton(
-                  onPressed: () => model.toggle(index),
-                  icon: Icon(
-                    isFav ? Icons.favorite : Icons.favorite_border,
-                    color: isFav ? Colors.red : null,
+            return ListTile(
+              leading: Container(width: 24, height: 24, color: color),
+              title: Text(name),
+              trailing: isAdded
+                  ? const Icon(Icons.check, color: Colors.black)
+                  : TextButton(
+                      child: const Text('ADD'),
+                      onPressed: () {
+                        context.read<CartModel>().add(name);
+                      },
+                    ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class CartPage extends StatelessWidget {
+  const CartPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = context.watch<CartModel>();
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Cart')),
+      body: Container(
+        color: Colors.yellow,
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView(
+                children: cart.items
+                    .map(
+                      (item) => ListTile(
+                        leading: const Icon(Icons.check),
+                        title: Text(item),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.remove_circle_outline),
+                          onPressed: () => cart.remove(item),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: Colors.black)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '\$${cart.totalPrice}',
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-              );
-            },
-          );
-        },
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black,
+                    ),
+                    child: const Text('BUY'),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SummaryPage()),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SummaryPage extends StatelessWidget {
+  const SummaryPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = context.watch<CartModel>();
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Purchase Summary')),
+      body: Container(
+        color: const Color(0xFFFFF7E6),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Thank you for your purchase!',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            const Text('Items:'),
+            ...cart.items.map((e) => Text('- $e')),
+            const SizedBox(height: 16),
+            Text('Total: \$${cart.totalPrice}'),
+            const Spacer(),
+            Center(
+              child: ElevatedButton(
+                child: const Text('Back to Home'),
+                onPressed: () {
+                  Navigator.popUntil(context, (route) => route.isFirst);
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
